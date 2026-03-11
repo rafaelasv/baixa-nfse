@@ -44,6 +44,8 @@ O arquivo `.xlsx` deve seguir este formato:
 - Linha 2: cabeçalho (ignorado)
 - Linha 3 em diante: dados das empresas
 
+> Um arquivo `template_planilha.xlsx` está disponível na raiz do projeto para uso como base.
+
 ---
 
 ## Como usar
