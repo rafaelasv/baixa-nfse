@@ -3,7 +3,7 @@ Automacao NFS-e - Portal Contribuinte  v3.0
 Baixa XMLs ou DANFS-e de notas recebidas para multiplas empresas.
 
 Dependencias:
-    pip install selenium openpyxl
+    pip install selenium openpyxl customtkinter
 
 Estrutura da planilha (.xlsx):
     Linha 1: cabecalho (ignorado)
@@ -14,8 +14,14 @@ Estrutura da planilha (.xlsx):
 import os
 import time
 import tkinter as tk
-from tkinter import filedialog, messagebox, ttk
+from tkinter import filedialog, messagebox
 from threading import Thread
+
+import customtkinter as ctk
+from PIL import Image
+
+ctk.set_appearance_mode("dark")
+ctk.set_default_color_theme("blue")
 
 import openpyxl
 from selenium import webdriver
@@ -32,7 +38,7 @@ from selenium.common.exceptions import TimeoutException, NoSuchElementException
 URL_LOGIN     = "https://www.nfse.gov.br/EmissorNacional/"
 URL_RECEBIDAS = "https://www.nfse.gov.br/EmissorNacional/Notas/Recebidas"
 
-TIPO_DOWNLOAD = "xml"   # "xml" ou "pdf"
+TIPO_DOWNLOAD = "XML"   # "xml" ou "pdf"
 
 PASTA_SAIDA_PADRAO = os.path.join(os.path.expanduser("~"), "Downloads", "Downloads_XML")
 
@@ -205,7 +211,7 @@ def baixar_todas_as_notas(driver, tipo: str, log_fn):
       Dropdown:             <div class="list-group menu-content">
       Opcoes:               <a> dentro do dropdown com o texto da acao
     """
-    texto_opcao = "Download XML" if tipo == "xml" else "Download DANFS-e"
+    texto_opcao = "Download XML" if tipo == "XML" else "Download DANFS-e"
     wait = WebDriverWait(driver, 15)
     pagina = 1
 
@@ -304,12 +310,11 @@ def baixar_todas_as_notas(driver, tipo: str, log_fn):
 # ─────────────────────────────────────────────
 
 class App:
-    def __init__(self, root: tk.Tk):
-        self.root = root
-        self.root.title("Automacao NFS-e Nacional")
-        self.root.geometry("620x560")
+    def __init__(self):
+        self.root = ctk.CTk()
+        self.root.title("NFS-e  ·  Download Automático")
+        self.root.geometry("660x620")
         self.root.resizable(False, False)
-        self.root.configure(bg="#2b2b2b")
 
         self.caminho_planilha = tk.StringVar()
         self.pasta_saida      = tk.StringVar(value=PASTA_SAIDA_PADRAO)
@@ -321,92 +326,138 @@ class App:
         self.empresa_atual_idx = 0
         self.driver   = None
         self.rodando  = False
-        self._confirmacao_ok = False
 
         self._construir_tela()
 
     def _construir_tela(self):
-        BG    = "#2b2b2b"
-        BG2   = "#3c3f41"
-        FG    = "#ffffff"
-        VERDE = "#00cc44"
-        AZUL  = "#3d8bcd"
+        # ── Cabeçalho ──────────────────────────────────────────
+        header = ctk.CTkFrame(self.root, fg_color=("gray90", "#111827"), corner_radius=0)
+        header.pack(fill="x")
 
-        tk.Label(self.root, text="Automação de Download - NFS-e",
-                 bg=BG, fg=VERDE, font=("Consolas", 14, "bold")).pack(pady=(15, 5))
+        logo_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "nfse-logo.png")
+        try:
+            pil_img = Image.open(logo_path)
+            # mantém proporção baseando na altura desejada de 44px
+            h = 44
+            w = int(pil_img.width * h / pil_img.height)
+            logo_img = ctk.CTkImage(light_image=pil_img, dark_image=pil_img, size=(w, h))
+            ctk.CTkLabel(header, image=logo_img, text="").pack(side="left", padx=(18, 10), pady=12)
+        except Exception:
+            ctk.CTkLabel(
+                header, text="NFS-e", font=ctk.CTkFont("Segoe UI", 22, "bold"),
+                text_color="#3b82f6"
+            ).pack(side="left", padx=(20, 4), pady=14)
 
-        # Planilha
-        f = tk.Frame(self.root, bg=BG2, pady=6, padx=10)
-        f.pack(fill="x", padx=15, pady=4)
-        tk.Label(f, text="Planilha (.xlsx):", bg=BG2, fg=FG, width=16, anchor="w").pack(side="left")
-        tk.Entry(f, textvariable=self.caminho_planilha, width=42,
-                 bg="#1e1e1e", fg=FG, insertbackground=FG).pack(side="left", padx=4)
-        tk.Button(f, text="...", command=self._sel_planilha,
-                  bg=AZUL, fg=FG, width=3).pack(side="left")
+        ctk.CTkLabel(
+            header, text="Automação de Download",
+            font=ctk.CTkFont("Segoe UI", 13), text_color=("gray40", "gray60")
+        ).pack(side="left", pady=14)
+        ctk.CTkLabel(
+            header, text="v3.0",
+            font=ctk.CTkFont("Segoe UI", 10), text_color=("gray60", "gray50")
+        ).pack(side="right", padx=20, pady=14)
 
-        # Pasta de saida
-        f2 = tk.Frame(self.root, bg=BG2, pady=6, padx=10)
-        f2.pack(fill="x", padx=15, pady=4)
-        tk.Label(f2, text="Salvar em:", bg=BG2, fg=FG, width=16, anchor="w").pack(side="left")
-        tk.Entry(f2, textvariable=self.pasta_saida, width=42,
-                 bg="#1e1e1e", fg=FG, insertbackground=FG).pack(side="left", padx=4)
-        tk.Button(f2, text="...", command=self._sel_pasta,
-                  bg=AZUL, fg=FG, width=3).pack(side="left")
+        # ── Corpo ──────────────────────────────────────────────
+        body = ctk.CTkFrame(self.root, fg_color="transparent")
+        body.pack(fill="both", expand=True, padx=20, pady=(16, 0))
 
-        # Datas + tipo
-        f3 = tk.Frame(self.root, bg=BG2, pady=6, padx=10)
-        f3.pack(fill="x", padx=15, pady=4)
-        tk.Label(f3, text="Data Início:", bg=BG2, fg=FG).pack(side="left")
-        tk.Entry(f3, textvariable=self.data_inicio, width=12,
-                 bg="#1e1e1e", fg=FG, insertbackground=FG).pack(side="left", padx=4)
-        tk.Label(f3, text="Data Fim:", bg=BG2, fg=FG).pack(side="left", padx=(10, 0))
-        tk.Entry(f3, textvariable=self.data_fim, width=12,
-                 bg="#1e1e1e", fg=FG, insertbackground=FG).pack(side="left", padx=4)
-        tk.Label(f3, text="Tipo:", bg=BG2, fg=FG).pack(side="left", padx=(15, 0))
-        ttk.Combobox(f3, textvariable=self.tipo_download,
-                     values=["xml", "pdf"], width=5, state="readonly").pack(side="left", padx=4)
+        # Card: Arquivos
+        card1 = ctk.CTkFrame(body, corner_radius=10)
+        card1.pack(fill="x", pady=(0, 10))
 
-        # Botoes
-        fb = tk.Frame(self.root, bg=BG, pady=8)
-        fb.pack()
+        ctk.CTkLabel(
+            card1, text="ARQUIVOS",
+            font=ctk.CTkFont("Segoe UI", 10, "bold"), text_color=("gray50", "gray50")
+        ).grid(row=0, column=0, columnspan=3, sticky="w", padx=14, pady=(10, 4))
 
-        self.btn_iniciar = tk.Button(
-            fb, text="INICIAR PROCESSO",
-            bg=VERDE, fg="#000000", font=("Consolas", 11, "bold"),
-            padx=15, command=self._iniciar
+        ctk.CTkLabel(card1, text="Planilha", font=ctk.CTkFont("Segoe UI", 12),
+                     anchor="w").grid(row=1, column=0, padx=(14, 8), pady=6, sticky="w")
+        ctk.CTkEntry(card1, textvariable=self.caminho_planilha,
+                     width=440, placeholder_text="Selecione o arquivo .xlsx…"
+                     ).grid(row=1, column=1, pady=6, sticky="ew")
+        ctk.CTkButton(card1, text="···", width=40, command=self._sel_planilha,
+                      fg_color=("#3b82f6", "#1d4ed8"), hover_color=("#2563eb", "#1e40af")
+                      ).grid(row=1, column=2, padx=(6, 14), pady=6)
+
+        ctk.CTkLabel(card1, text="Salvar em", font=ctk.CTkFont("Segoe UI", 12),
+                     anchor="w").grid(row=2, column=0, padx=(14, 8), pady=(0, 10), sticky="w")
+        ctk.CTkEntry(card1, textvariable=self.pasta_saida,
+                     width=440, placeholder_text="Pasta de destino…"
+                     ).grid(row=2, column=1, pady=(0, 10), sticky="ew")
+        ctk.CTkButton(card1, text="···", width=40, command=self._sel_pasta,
+                      fg_color=("#3b82f6", "#1d4ed8"), hover_color=("#2563eb", "#1e40af")
+                      ).grid(row=2, column=2, padx=(6, 14), pady=(0, 10))
+
+        card1.columnconfigure(1, weight=1)
+
+        # Card: Período
+        card2 = ctk.CTkFrame(body, corner_radius=10)
+        card2.pack(fill="x", pady=(0, 10))
+
+        ctk.CTkLabel(
+            card2, text="PERÍODO  &  TIPO",
+            font=ctk.CTkFont("Segoe UI", 10, "bold"), text_color=("gray50", "gray50")
+        ).grid(row=0, column=0, columnspan=6, sticky="w", padx=14, pady=(10, 4))
+
+        ctk.CTkLabel(card2, text="De", font=ctk.CTkFont("Segoe UI", 12)
+                     ).grid(row=1, column=0, padx=(14, 6), pady=(0, 12))
+        ctk.CTkEntry(card2, textvariable=self.data_inicio, width=110
+                     ).grid(row=1, column=1, pady=(0, 12))
+        ctk.CTkLabel(card2, text="Até", font=ctk.CTkFont("Segoe UI", 12)
+                     ).grid(row=1, column=2, padx=(14, 6), pady=(0, 12))
+        ctk.CTkEntry(card2, textvariable=self.data_fim, width=110
+                     ).grid(row=1, column=3, pady=(0, 12))
+        ctk.CTkLabel(card2, text="Tipo", font=ctk.CTkFont("Segoe UI", 12)
+                     ).grid(row=1, column=4, padx=(20, 6), pady=(0, 12))
+        ctk.CTkComboBox(card2, variable=self.tipo_download,
+                        values=["XML", "PDF"], width=80, state="readonly"
+                        ).grid(row=1, column=5, padx=(0, 14), pady=(0, 12))
+
+        # ── Botões ─────────────────────────────────────────────
+        btn_row = ctk.CTkFrame(body, fg_color="transparent")
+        btn_row.pack(fill="x", pady=(4, 10))
+
+        self.btn_iniciar = ctk.CTkButton(
+            btn_row, text="  Iniciar Processo  ",
+            font=ctk.CTkFont("Segoe UI", 13, "bold"),
+            height=40, corner_radius=8,
+            fg_color=("#16a34a", "#15803d"), hover_color=("#15803d", "#166534"),
+            command=self._iniciar
         )
-        self.btn_iniciar.pack(side="left", padx=6)
+        self.btn_iniciar.pack(side="left", padx=(0, 10))
 
-        self.btn_parar = tk.Button(
-            fb, text="Parar",
-            bg="#cc3333", fg=FG, font=("Consolas", 10, "bold"),
-            padx=10, command=self._parar, state="disabled"
+        self.btn_parar = ctk.CTkButton(
+            btn_row, text="Parar",
+            font=ctk.CTkFont("Segoe UI", 12),
+            height=40, corner_radius=8, width=100,
+            fg_color=("#dc2626", "#b91c1c"), hover_color=("#b91c1c", "#991b1b"),
+            state="disabled", command=self._parar
         )
-        self.btn_parar.pack(side="left", padx=6)
+        self.btn_parar.pack(side="left")
 
-        # Status
-        self.lbl_status = tk.Label(self.root, text="Pronto.", bg=BG, fg="#aaaaaa",
-                                   font=("Consolas", 9))
-        self.lbl_status.pack()
-
-        # Log
-        fl = tk.Frame(self.root, bg=BG)
-        fl.pack(fill="both", expand=True, padx=15, pady=(0, 8))
-        self.txt_log = tk.Text(
-            fl, bg="#1a1a1a", fg="#00ff66",
-            font=("Consolas", 9), state="disabled", wrap="word"
+        # ── Status + barra de progresso ────────────────────────
+        self.lbl_status = ctk.CTkLabel(
+            body, text="● Pronto",
+            font=ctk.CTkFont("Segoe UI", 11), text_color=("gray50", "gray50"),
+            anchor="w"
         )
-        scroll = tk.Scrollbar(fl, command=self.txt_log.yview)
-        self.txt_log.configure(yscrollcommand=scroll.set)
-        scroll.pack(side="right", fill="y")
-        self.txt_log.pack(fill="both", expand=True)
+        self.lbl_status.pack(fill="x", pady=(0, 4))
 
-        # Rodape
-        tk.Label(
-            self.root,
-            text=f"Versao 3.0  |  Salvará em: {os.path.basename(PASTA_SAIDA_PADRAO)}",
-            bg="#1a1a1a", fg="#666666", font=("Consolas", 8)
-        ).pack(fill="x", side="bottom")
+        self.progress = ctk.CTkProgressBar(body, height=4, corner_radius=2)
+        self.progress.set(0)
+        self.progress.pack(fill="x", pady=(0, 10))
+
+        # ── Log ────────────────────────────────────────────────
+        self.txt_log = ctk.CTkTextbox(
+            body,
+            font=ctk.CTkFont("Consolas", 10),
+            fg_color=("#f8f9fa", "#0d1117"),
+            text_color=("#374151", "#e2e8f0"),
+            corner_radius=8,
+            state="disabled",
+            wrap="word"
+        )
+        self.txt_log.pack(fill="both", expand=True, pady=(0, 16))
 
     def _sel_planilha(self):
         p = filedialog.askopenfilename(filetypes=[("Excel", "*.xlsx")])
@@ -427,7 +478,7 @@ class App:
         self.root.after(0, _a)
 
     def status(self, msg: str):
-        self.root.after(0, lambda: self.lbl_status.config(text=msg))
+        self.root.after(0, lambda: self.lbl_status.configure(text=f"● {msg}"))
 
     def _iniciar(self):
         if not self.caminho_planilha.get():
@@ -440,14 +491,16 @@ class App:
             return
         if not self.empresas:
             messagebox.showerror("Erro", "Nenhuma empresa encontrada.\n"
-                                         "Verifique se há dados a partir da linha 2.")
+                                         "Verifique se há dados a partir da linha 3.")
             return
 
         self.log(f"Planilha carregada: {len(self.empresas)} empresa(s).")
         self.empresa_atual_idx = 0
         self.rodando = True
-        self.btn_iniciar.config(state="disabled")
-        self.btn_parar.config(state="normal")
+        self.btn_iniciar.configure(state="disabled")
+        self.btn_parar.configure(state="normal")
+        self.progress.configure(mode="indeterminate")
+        self.progress.start()
         self.driver = configurar_chrome(self.pasta_saida.get())
         Thread(target=self._loop_empresas, daemon=True).start()
 
@@ -458,7 +511,7 @@ class App:
             emp = self.empresas[self.empresa_atual_idx]
             idx = self.empresa_atual_idx + 1
             self.status(f"Empresa {idx}/{total}: {emp['nome']}")
-            self.log(f"\n-- Empresa {idx}/{total}: {emp['nome']} ({emp['cnpj']}) --")
+            self.log(f"\n── Empresa {idx}/{total}: {emp['nome']} ({emp['cnpj']}) ──")
 
             # Cria pasta e aponta download para ela
             pasta = criar_pasta_empresa(self.pasta_saida.get(), emp["nome"], emp["cnpj"])
@@ -502,7 +555,7 @@ class App:
 
         if self.rodando:
             self.log("\nTodas as empresas foram processadas!")
-            self.status("Concluido.")
+            self.status("Concluído.")
         self._finalizar()
 
     def _parar(self):
@@ -512,8 +565,11 @@ class App:
 
     def _finalizar(self):
         def _u():
-            self.btn_iniciar.config(state="normal")
-            self.btn_parar.config(state="disabled")
+            self.btn_iniciar.configure(state="normal")
+            self.btn_parar.configure(state="disabled")
+            self.progress.stop()
+            self.progress.configure(mode="determinate")
+            self.progress.set(0)
         self.root.after(0, _u)
         if self.driver:
             try:
@@ -524,6 +580,5 @@ class App:
 
 
 if __name__ == "__main__":
-    root = tk.Tk()
-    app = App(root)
-    root.mainloop()
+    app = App()
+    app.root.mainloop()
