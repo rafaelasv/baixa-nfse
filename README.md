@@ -24,7 +24,7 @@ Script Python com interface gráfica para baixar automaticamente notas fiscais r
 Instale as dependências:
 
 ```bash
-pip install selenium openpyxl
+pip install selenium openpyxl customtkinter pillow
 ```
 
 > O ChromeDriver é gerenciado automaticamente pelo `selenium-manager` — não é necessário instalar manualmente.
@@ -50,7 +50,7 @@ O arquivo `.xlsx` deve seguir este formato:
 
 1. Execute o script:
    ```bash
-   python baixar_nfse.py
+   python main.py
    ```
 
 2. Na interface, preencha:
@@ -88,4 +88,6 @@ O arquivo `.xlsx` deve seguir este formato:
 - [Python](https://www.python.org/)
 - [Selenium](https://www.selenium.dev/) — automação do navegador
 - [openpyxl](https://openpyxl.readthedocs.io/) — leitura da planilha Excel
-- [tkinter](https://docs.python.org/3/library/tkinter.html) — interface gráfica
+- [customtkinter](https://github.com/TomSchimansky/CustomTkinter) — interface gráfica moderna
+- [Pillow](https://python-pillow.org/) — carregamento da logo na interface
+- [tkinter](https://docs.python.org/3/library/tkinter.html) — diálogos de arquivo
